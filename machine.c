@@ -8,7 +8,7 @@
 #undef DEBUG
 
 #ifdef DEBUG
-#define dputs(msg) puts(msg)
+#define dputs(msg) fprintf(stderr, "%s\n", msg)
 #define dprintf(args...) fprintf(stderr, args)
 #else
 #define dputs(msg)
@@ -58,13 +58,16 @@ static void create_jumptable(machine_t m)
     int brackets(machine_t m, int start) {
         int i;
         for (i=start+1; i < m->code_size;i++) {
+        dprintf("brackets: i=%d\n", i);
             switch (m->code[i]) {
             case '[':
                 /* 新たなブロック発見 */
+                dputs ("found open bracket");
                 i = brackets(m, i);
                 break;
             case ']':
                 /* [ は ]+1 にジャンプし、] は [+1 にジャンプする */
+                dputs ("found close bracket");
                 m->jumptable[start] = i+1;
                 m->jumptable[i] = start+1;
                 return i;
@@ -74,14 +77,24 @@ static void create_jumptable(machine_t m)
     }
 
     /* 最初の [ を見付ける */
-    int i;
-    for (i=0; i < m->code_size && m->code[i] != '['; i++)
-        ;
+    int i = 0;
 
-    if (i != m->code_size)
-        brackets(m, i);
-    else
-        ; /* みつからなかったらそのまま終了*/
+    for (;;) {
+        for (; i < m->code_size && m->code[i] != '['; i++)
+            ;
+
+        if (i == m->code_size) break;
+
+        i = brackets(m, i) + 1;
+    }
+
+#ifdef DEBUG
+    for (i = 0; i < m->code_size; ++i) {
+        if (m->code[i] == '[' || m->code[i] == ']') {
+            fprintf(stderr, "a[%d]=%d\n", i, m->jumptable[i]);
+        }
+    }
+#endif
 }
 
 static bool running(machine_t m)
