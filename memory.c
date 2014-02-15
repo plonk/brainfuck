@@ -24,7 +24,7 @@ static void check_range(memory_t mem, int index)
         fprintf(stderr, "index range error (%d)\n", index);
         exit(1);
     } else if (index >= mem->capacity) {
-        fprintf(stderr, "SEGV\n");
+        fprintf(stderr, "index (%d) >= mem->capacity (%d)\n", index, mem->capacity);
         exit(1);
     }
 }

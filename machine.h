@@ -4,7 +4,7 @@ typedef struct {
     memory_t mem;
     int dp;
     char *code;
-    int *jump_table;
+    int *jumptable;
     int code_size;
     int ip;
 } _machine, *machine_t;

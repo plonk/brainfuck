@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <assert.h>
 
 #undef DEBUG
 
@@ -27,6 +28,7 @@ static void openbracket(machine_t m);
 static void closebracket(machine_t m);
 static void nop(machine_t m);
 static char fetch_op(machine_t m);
+static void create_jumptable(machine_t m);
 
 machine_t machine_new(const char *code)
 {
@@ -36,14 +38,50 @@ machine_t machine_new(const char *code)
     inst->code = strdup(code);
     dprintf("code size %d bytes\n", strlen(code));
     inst->code_size = strlen(code);
+    inst->jumptable = calloc(sizeof(int), inst->code_size);
+    create_jumptable(inst);
     return inst;
 }
 
 void machine_free(machine_t inst)
 {
-    memory_free(inst->mem);
+    free(inst->jumptable);
     free(inst->code);
+    memory_free(inst->mem);
     free(inst);
+}
+
+static void create_jumptable(machine_t m)
+{
+    /* start: '[' の位置 */
+    /* 対応する ']' の位置を返す */
+    int brackets(machine_t m, int start) {
+        int i;
+        for (i=start+1; i < m->code_size;i++) {
+            switch (m->code[i]) {
+            case '[':
+                /* 新たなブロック発見 */
+                i = brackets(m, i);
+                break;
+            case ']':
+                /* [ は ]+1 にジャンプし、] は [+1 にジャンプする */
+                m->jumptable[start] = i+1;
+                m->jumptable[i] = start+1;
+                return i;
+            }
+        }
+        assert(0); /* unreachable */
+    }
+
+    /* 最初の [ を見付ける */
+    int i;
+    for (i=0; i < m->code_size && m->code[i] != '['; i++)
+        ;
+
+    if (i != m->code_size)
+        brackets(m, i);
+    else
+        ; /* みつからなかったらそのまま終了*/
 }
 
 static bool running(machine_t m)
@@ -131,21 +169,9 @@ static void decdata(machine_t m)
 /* データが 0 だったら対応する閉括弧の後に移動する */
 static void openbracket(machine_t m)
 {
-    dputs("open bracket");
     if (memory_at(m->mem, m->dp)==0) {
-        int inner_block;
-
-        incip(m);
-        for (inner_block=0;
-             !(inner_block==0 && m->code[m->ip]==']');
-             incip(m)) {
-            if (m->code[m->ip]=='[') {
-                inner_block++;
-            } else if (m->code[m->ip]==']') {
-                inner_block--;
-            }
-        }
-        incip(m);
+        assert(m->jumptable[m->ip] != 0);
+        m->ip = m->jumptable[m->ip];
     } else {
         incip(m);
     }
@@ -156,20 +182,8 @@ static void closebracket(machine_t m)
 {
     dputs("close bracket");
     if (memory_at(m->mem, m->dp)!=0) {
-        int inner_block;
-
-        decip(m);
-        for (inner_block=0;
-             !(inner_block==0 && m->code[m->ip]=='[');
-             decip(m)) {
-
-            if (m->code[m->ip]==']') {
-                inner_block++;
-            } else if (m->code[m->ip]=='[') {
-                inner_block--;
-            }
-        }
-        incip(m);
+        assert(m->jumptable[m->ip] != 0);
+        m->ip = m->jumptable[m->ip];
     } else {
         incip(m);
     }
